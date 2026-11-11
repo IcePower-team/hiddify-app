@@ -164,13 +164,75 @@ class AddProfileManual extends HookConsumerWidget {
     return '$day $hour';
   }
 
+  // Personal fork: manual per-protocol entry. The link is built here and added
+  // through the same clipboard path as a pasted link, so the core parses it.
+  String _buildSoarLink({
+    required String domain,
+    required String publicKey,
+    required String resolvers,
+    required String country,
+    required String name,
+  }) {
+    final query = <String, String>{'pk': publicKey.trim()};
+    if (resolvers.trim().isNotEmpty) query['resolvers'] = resolvers.trim();
+    if (country.trim().isNotEmpty) query['country'] = country.trim();
+    return Uri(scheme: 'soar', host: domain.trim(), queryParameters: query, fragment: name.trim()).toString();
+  }
+
+  String _buildWireGuardLink({
+    required String endpoint,
+    required String privateKey,
+    required String publicKey,
+    required String address,
+    required String allowedIPs,
+    required String presharedKey,
+    required String mtu,
+    required String keepalive,
+    required String name,
+  }) {
+    final hostPort = endpoint.trim().split(':');
+    final host = hostPort.sublist(0, hostPort.length - 1).join(':');
+    final port = hostPort.last;
+    final query = <String, String>{
+      'privateKey': privateKey.trim(),
+      'publicKey': publicKey.trim(),
+    };
+    if (presharedKey.trim().isNotEmpty) query['presharedKey'] = presharedKey.trim();
+    if (address.trim().isNotEmpty) query['ip'] = address.trim();
+    if (allowedIPs.trim().isNotEmpty) query['allowedips'] = allowedIPs.trim();
+    if (mtu.trim().isNotEmpty) query['mtu'] = mtu.trim();
+    if (keepalive.trim().isNotEmpty) query['keepalive'] = keepalive.trim();
+    return Uri(
+      scheme: 'wg',
+      host: host,
+      port: int.tryParse(port) ?? 0,
+      queryParameters: query,
+      fragment: name.trim(),
+    ).toString();
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final t = ref.watch(translationsProvider).requireValue;
     final formKey = useMemoized(() => GlobalKey<FormState>());
+    final protocol = useState<String>('link');
     final nameTextController = useTextEditingController();
     final urlTextController = useTextEditingController();
+    // Soar fields
+    final soarDomainController = useTextEditingController();
+    final soarKeyController = useTextEditingController();
+    final soarResolversController = useTextEditingController();
+    final soarCountryController = useTextEditingController();
+    // WireGuard fields
+    final wgEndpointController = useTextEditingController();
+    final wgPrivateKeyController = useTextEditingController();
+    final wgPublicKeyController = useTextEditingController();
+    final wgAddressController = useTextEditingController(text: '10.0.0.2/32');
+    final wgAllowedIPsController = useTextEditingController(text: '0.0.0.0/0, ::/0');
+    final wgPresharedKeyController = useTextEditingController();
+    final wgMtuController = useTextEditingController();
+    final wgKeepaliveController = useTextEditingController();
     final isAutoUpdateDisable = useState<bool>(false);
     final updateInterval = useState(.0);
     final sliderFocusNode = useFocusNode(
@@ -186,6 +248,7 @@ class AddProfileManual extends HookConsumerWidget {
         return KeyEventResult.ignored;
       },
     );
+    String? requiredValidator(String? value) => (value?.trim().isEmpty ?? true) ? 'این فیلد الزامی است' : null;
     return Form(
       key: formKey,
       child: Column(
@@ -205,6 +268,22 @@ class AddProfileManual extends HookConsumerWidget {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: DropdownButtonFormField<String>(
+              value: protocol.value,
+              decoration: const InputDecoration(labelText: 'پروتکل'),
+              items: const [
+                DropdownMenuItem(value: 'link', child: Text('لینک سابسکریپشن')),
+                DropdownMenuItem(value: 'soar', child: Text('Soar')),
+                DropdownMenuItem(value: 'wireguard', child: Text('WireGuard')),
+              ],
+              onChanged: (value) {
+                if (value != null) protocol.value = value;
+              },
+            ),
+          ),
+          const Gap(16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: CustomTextFormField(
               maxLines: 1,
               controller: nameTextController,
@@ -214,30 +293,169 @@ class AddProfileManual extends HookConsumerWidget {
             ),
           ),
           const Gap(16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: CustomTextFormField(
-              maxLines: 1,
-              controller: urlTextController,
-              validator: (value) => (value != null && !isUrl(value)) ? t.pages.profileDetails.form.invalidUrl : null,
-              label: t.common.url,
-              hint: t.pages.profileDetails.form.urlHint,
+          if (protocol.value == 'link')
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: urlTextController,
+                validator: (value) => (value != null && !isUrl(value)) ? t.pages.profileDetails.form.invalidUrl : null,
+                label: t.common.url,
+                hint: t.pages.profileDetails.form.urlHint,
+              ),
             ),
-          ),
+          if (protocol.value == 'soar') ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: soarDomainController,
+                validator: requiredValidator,
+                label: 'دامنه‌ی تونل',
+                hint: 't.example.com',
+              ),
+            ),
+            const Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: soarKeyController,
+                validator: requiredValidator,
+                label: 'کلید عمومی سرور',
+                hint: 'کلید base64 سرور',
+              ),
+            ),
+            const Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: soarResolversController,
+                label: 'ریزالورها (اختیاری)',
+                hint: '8.8.8.8,1.1.1.1',
+              ),
+            ),
+            const Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: soarCountryController,
+                label: 'کشور (اختیاری)',
+                hint: 'ir',
+              ),
+            ),
+          ],
+          if (protocol.value == 'wireguard') ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: wgEndpointController,
+                validator: (value) {
+                  if (value?.trim().isEmpty ?? true) return 'این فیلد الزامی است';
+                  final parts = value!.trim().split(':');
+                  if (parts.length < 2 || int.tryParse(parts.last) == null) {
+                    return 'آدرس سرور باید به صورت host:port باشد';
+                  }
+                  return null;
+                },
+                label: 'آدرس سرور',
+                hint: 'example.com:51820',
+              ),
+            ),
+            const Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: wgPrivateKeyController,
+                validator: requiredValidator,
+                label: 'کلید خصوصی',
+                hint: 'کلید base64 شما',
+              ),
+            ),
+            const Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: wgPublicKeyController,
+                validator: requiredValidator,
+                label: 'کلید عمومی پیر',
+                hint: 'کلید base64 سرور',
+              ),
+            ),
+            const Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: wgAddressController,
+                validator: requiredValidator,
+                label: 'آدرس محلی',
+                hint: '10.0.0.2/32',
+              ),
+            ),
+            const Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: wgAllowedIPsController,
+                label: 'آی‌پی‌های مجاز',
+                hint: '0.0.0.0/0, ::/0',
+              ),
+            ),
+            const Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: wgPresharedKeyController,
+                label: 'کلید پیش‌اشتراکی (اختیاری)',
+                hint: 'کلید base64',
+              ),
+            ),
+            const Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: wgMtuController,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                label: 'MTU (اختیاری)',
+                hint: '1380',
+              ),
+            ),
+            const Gap(16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomTextFormField(
+                maxLines: 1,
+                controller: wgKeepaliveController,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                label: 'Keepalive (اختیاری)',
+                hint: '25',
+              ),
+            ),
+          ],
           const Gap(12),
-          SwitchListTile.adaptive(
-            title: Text(
-              t.pages.profileDetails.form.disableAutoUpdate,
-              style: theme.textTheme.titleSmall!.copyWith(color: theme.colorScheme.onSurface),
+          if (protocol.value == 'link')
+            SwitchListTile.adaptive(
+              title: Text(
+                t.pages.profileDetails.form.disableAutoUpdate,
+                style: theme.textTheme.titleSmall!.copyWith(color: theme.colorScheme.onSurface),
+              ),
+              value: isAutoUpdateDisable.value,
+              onChanged: (value) => isAutoUpdateDisable.value = value,
             ),
-            value: isAutoUpdateDisable.value,
-            onChanged: (value) => isAutoUpdateDisable.value = value,
-          ),
           AnimatedSize(
             alignment: Alignment.topCenter,
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
-            child: !isAutoUpdateDisable.value
+            child: protocol.value == 'link' && !isAutoUpdateDisable.value
                 ? Column(
                     children: [
                       const Divider(indent: 16, endIndent: 16),
@@ -285,18 +503,43 @@ class AddProfileManual extends HookConsumerWidget {
                     child: Text(t.common.add),
                     onPressed: () async {
                       if (formKey.currentState!.validate()) {
-                        final i = updateInterval.value.toInt();
-                        final interval = i > 0 ? i : null;
-                        await ref
-                            .read(addProfileNotifierProvider.notifier)
-                            .addManual(
-                              url: urlTextController.text.trim(),
-                              userOverride: UserOverride(
-                                name: nameTextController.text.trim(),
-                                isAutoUpdateDisable: isAutoUpdateDisable.value,
-                                updateInterval: interval,
-                              ),
-                            );
+                        final notifier = ref.read(addProfileNotifierProvider.notifier);
+                        if (protocol.value == 'soar') {
+                          await notifier.addClipboard(
+                            _buildSoarLink(
+                              domain: soarDomainController.text,
+                              publicKey: soarKeyController.text,
+                              resolvers: soarResolversController.text,
+                              country: soarCountryController.text,
+                              name: nameTextController.text,
+                            ),
+                          );
+                        } else if (protocol.value == 'wireguard') {
+                          await notifier.addClipboard(
+                            _buildWireGuardLink(
+                              endpoint: wgEndpointController.text,
+                              privateKey: wgPrivateKeyController.text,
+                              publicKey: wgPublicKeyController.text,
+                              address: wgAddressController.text,
+                              allowedIPs: wgAllowedIPsController.text,
+                              presharedKey: wgPresharedKeyController.text,
+                              mtu: wgMtuController.text,
+                              keepalive: wgKeepaliveController.text,
+                              name: nameTextController.text,
+                            ),
+                          );
+                        } else {
+                          final i = updateInterval.value.toInt();
+                          final interval = i > 0 ? i : null;
+                          await notifier.addManual(
+                            url: urlTextController.text.trim(),
+                            userOverride: UserOverride(
+                              name: nameTextController.text.trim(),
+                              isAutoUpdateDisable: isAutoUpdateDisable.value,
+                              updateInterval: interval,
+                            ),
+                          );
+                        }
                       }
                     },
                   ),
