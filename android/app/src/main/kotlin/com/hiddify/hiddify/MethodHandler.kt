@@ -4,15 +4,12 @@ import android.util.Log
 import com.hiddify.hiddify.bg.BoxService
 //import com.hiddify.hiddify.bg.BoxService.Companion.workingDir
 import com.hiddify.hiddify.constant.Status
-import com.hiddify.hiddify.utils.DeviceMemory
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 import com.hiddify.core.libbox.Libbox
 import com.hiddify.core.mobile.Mobile
-import com.hiddify.core.mobile.SetupOptions
-import com.hiddify.hiddify.bg.Bugs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -73,17 +70,15 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
                         Log.d("debugmode","${Settings.debugMode}")
                         runCatching {
                             Mobile.setup(
-                                SetupOptions().also {
-                                    it.basePath = Settings.baseDir
-                                    it.workingDir = Settings.workingDir
-                                    it.tempDir = Settings.tempDir
-                                    it.fixAndroidStack = Bugs.fixAndroidStack
-                                    it.mode=mode.toLong()
-                                    it.listen= "127.0.0.1:" + grpcPort
-                                    it.secret=""
-                                    it.debug = Settings.debugMode
-                                    DeviceMemory.applyTo(it)
-                                }, BoxService.activePlatformInterface)
+                                Settings.baseDir,
+                                Settings.workingDir,
+                                Settings.tempDir,
+                                mode.toLong(),
+                                "127.0.0.1:$grpcPort",
+                                "",
+                                Settings.debugMode,
+                                BoxService.activePlatformInterface,
+                            )
 
 //                            Libbox.setup(Settings.baseDir, Settings.workingDir, Settings.tempDir, false)
                             Libbox.redirectStderr(File(Settings.workingDir, "stderr2.log").path)

@@ -24,9 +24,7 @@ import com.hiddify.hiddify.Settings
 import com.hiddify.hiddify.constant.Action
 import com.hiddify.hiddify.constant.Alert
 import com.hiddify.hiddify.constant.Status
-import com.hiddify.hiddify.utils.DeviceMemory
 import com.hiddify.hiddify.utils.GrpcClientProvider
-import com.hiddify.core.mobile.SetupOptions
 
 import go.Seq
 import com.hiddify.core.libbox.Libbox
@@ -40,7 +38,6 @@ import com.hiddify.core.libbox.PlatformInterface
 import com.hiddify.core.libbox.SystemProxyStatus
 import com.hiddify.hiddify.BuildConfig
 import com.hiddify.hiddify.MainActivity
-import com.hiddify.hiddify.constant.Bugs
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -179,17 +176,13 @@ class BoxService(
             grpcSetupMode = if (GrpcClientProvider.usesMutualTls) 2L else 4L
             try {
                 Mobile.setup(
-                    SetupOptions().also {
-                        it.basePath = Settings.baseDir
-                        it.workingDir = Settings.workingDir
-                        it.tempDir = Settings.tempDir
-                        it.fixAndroidStack = com.hiddify.hiddify.bg.Bugs.fixAndroidStack
-                        it.mode = grpcSetupMode
-                        it.listen = "127.0.0.1:${Settings.grpcServiceModePort}"
-                        it.secret = ""
-                        it.debug = Settings.debugMode
-                        DeviceMemory.applyTo(it)
-                    },
+                    Settings.baseDir,
+                    Settings.workingDir,
+                    Settings.tempDir,
+                    grpcSetupMode,
+                    "127.0.0.1:${Settings.grpcServiceModePort}",
+                    "",
+                    Settings.debugMode,
                     platformInterface,
                 )
                 // the core trusts the client certificate stored in the base folder by itself
@@ -268,12 +261,10 @@ class BoxService(
 
     @RequiresApi(Build.VERSION_CODES.M)
     private fun serviceUpdateIdleMode() {
+        // No-op: the new core has no mobile pause/wake API (Mobile.wake was removed
+        // with SetupOptions); the box is never paused from here, so nothing to resume.
         if (Application.powerManager.isDeviceIdleMode) {
-//            boxService?.pause()
-            //Mobile.pause()
         } else {
-            Mobile.wake()
-//            boxService?.wake()
         }
     }
 
