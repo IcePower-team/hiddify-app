@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -173,6 +174,13 @@ class CoreInterfaceMobile extends CoreInterface with InfraLogger {
     if (serverCert == null || serverCert.isEmpty) {
       throw StateError('empty gRPC server certificate');
     }
+
+    // Register this client certificate with the core before connecting: the
+    // server trusts a client only once its certificate is registered, and
+    // without this the mTLS handshake never completes (hello times out).
+    await methodChannel.invokeMethod('add_grpc_client_public_key', {
+      'certificate': Uint8List.fromList(utf8.encode(_identity.certificatePem)),
+    }).timeout(const Duration(seconds: 10));
 
     final mtls = MTLSChannelCredentials.fromPem(
       serverCertificatePem: serverCert,

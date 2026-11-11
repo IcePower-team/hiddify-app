@@ -31,6 +31,7 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
             Stop("stop"),
             Restart("restart"),
             GetGrpcServerPublicKey("get_grpc_server_public_key"),
+            AddGrpcClientPublicKey("add_grpc_client_public_key"),
 
         }
     }
@@ -56,6 +57,23 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
                     } catch (e: Exception) {
                         Log.e(TAG, "get_grpc_server_public_key failed", e)
                         result.error("get_key_failed", e.message ?: e.toString(), null)
+                    }
+                }
+            }
+
+            Trigger.AddGrpcClientPublicKey.method -> {
+                GlobalScope.launch {
+                    try {
+                        // The core's gRPC server trusts a client only once its
+                        // certificate is registered; without this the mTLS
+                        // handshake never completes and the hello probe times out.
+                        val certificate = call.argument<ByteArray>("certificate")
+                            ?: throw IllegalArgumentException("missing certificate")
+                        Mobile.addGrpcClientPublicKey(certificate)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "add_grpc_client_public_key failed", e)
+                        result.error("add_client_key_failed", e.message ?: e.toString(), null)
                     }
                 }
             }
