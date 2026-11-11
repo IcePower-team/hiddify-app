@@ -51,15 +51,18 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
         when (call.method) {
             Trigger.GetGrpcServerPublicKey.method -> {
                 GlobalScope.launch {
-                    result.runCatching {
+                    try {
                         result.success(Mobile.getServerPublicKey())
+                    } catch (e: Exception) {
+                        Log.e(TAG, "get_grpc_server_public_key failed", e)
+                        result.error("get_key_failed", e.message ?: e.toString(), null)
                     }
                 }
             }
 
             Trigger.Setup.method -> {
                 GlobalScope.launch {
-                    result.runCatching {
+                    try {
                         val args = call.arguments as Map<*, *>
                         Settings.baseDir = args["baseDir"] as String
                         Settings.workingDir = args["workingDir"] as String
@@ -67,27 +70,28 @@ class MethodHandler(private val scope: CoroutineScope) : FlutterPlugin,
                         Settings.debugMode = args["debug"] as Boolean? ?: false
                         val mode = args["mode"] as Int
                         val grpcPort = args["grpcPort"] as Int
-                        Log.d("debugmode","${Settings.debugMode}")
-                        runCatching {
-                            Mobile.setup(
-                                Settings.baseDir,
-                                Settings.workingDir,
-                                Settings.tempDir,
-                                mode.toLong(),
-                                "127.0.0.1:$grpcPort",
-                                "",
-                                Settings.debugMode,
-                                BoxService.activePlatformInterface,
-                            )
+                        Log.d("debugmode", "${Settings.debugMode}")
+                        Mobile.setup(
+                            Settings.baseDir,
+                            Settings.workingDir,
+                            Settings.tempDir,
+                            mode.toLong(),
+                            "127.0.0.1:$grpcPort",
+                            "",
+                            Settings.debugMode,
+                            BoxService.activePlatformInterface,
+                        )
 
 //                            Libbox.setup(Settings.baseDir, Settings.workingDir, Settings.tempDir, false)
-                            Libbox.redirectStderr(File(Settings.workingDir, "stderr2.log").path)
+                        Libbox.redirectStderr(File(Settings.workingDir, "stderr2.log").path)
 
-                            success("")
-                        }.onFailure {
-                            error(it)
-                        }
-
+                        result.success("")
+                    } catch (e: Exception) {
+                        // A setup failure must reach Dart: the old runCatching/error(it)
+                        // path swallowed it (stdlib error() throws inside runCatching),
+                        // leaving Dart awaiting 'setup' forever on the splash screen.
+                        Log.e(TAG, "setup failed", e)
+                        result.error("setup_failed", e.message ?: e.toString(), null)
                     }
                 }
             }

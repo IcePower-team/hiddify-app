@@ -81,6 +81,8 @@ class CoreInterfaceMobile extends CoreInterface with InfraLogger {
 
     // Start the core first — the server certificate only exists after setup.
     if (!await isPortOpen('127.0.0.1', portFront)) {
+      // The native call has no reply on failure in older builds; a timeout
+      // keeps a stuck core from freezing the splash screen forever.
       final setupResult = await methodChannel.invokeMethod<dynamic>('setup', {
         'baseDir': directories.baseDir.path,
         'workingDir': directories.workingDir.path,
@@ -88,7 +90,7 @@ class CoreInterfaceMobile extends CoreInterface with InfraLogger {
         'grpcPort': portFront,
         'mode': mode,
         'debug': debug,
-      });
+      }).timeout(const Duration(seconds: 20));
       _applyNativeStatusPayload(setupResult);
       if (!await waitUntilPort(portFront, true, null)) {
         return 'failed to start foreground gRPC';
@@ -114,7 +116,8 @@ class CoreInterfaceMobile extends CoreInterface with InfraLogger {
     );
     try {
       final helloClient = HelloClient(helloChannel);
-      final res = await helloClient.sayHello(HelloRequest(name: 'test'));
+      final res = await helloClient.sayHello(HelloRequest(name: 'test'))
+          .timeout(const Duration(seconds: 10));
       loggy.info(res.toString());
     } catch (e, st) {
       loggy.error('gRPC hello failed', e, st);
@@ -165,7 +168,8 @@ class CoreInterfaceMobile extends CoreInterface with InfraLogger {
       return const ChannelCredentials.insecure();
     }
 
-    final serverCert = await methodChannel.invokeMethod<Uint8List>('get_grpc_server_public_key');
+    final serverCert = await methodChannel.invokeMethod<Uint8List>('get_grpc_server_public_key')
+        .timeout(const Duration(seconds: 10));
     if (serverCert == null || serverCert.isEmpty) {
       throw StateError('empty gRPC server certificate');
     }
